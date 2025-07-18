@@ -1,0 +1,139 @@
+--PL/SQL Procedure and Scheduler Job 
+--Write a PL/SQL procedure to summarize the total hours worked by each employee. 
+--Configure a Scheduler job to automate this report weekly.
+
+--Assumption : Employees the Oraganization
+--Employees Log in and Logout every day, times are captured in one of the table called emp_log_times
+--If we have only timestamp stamped in a table, We need to Calculate the dates and convert it into Hours for each date and insert into table work_log
+--To summarize the hours from work_log tbale for each date refer SP summarize_employee_hours and insert data into emp_hours_summary
+--Summarized data present in emp_hours_summary
+--Please follow the steps as below :
+
+--Step1 : Create table Work Log for Employees to insert Datewise Hours
+
+CREATE TABLE work_log (
+    emp_id       NUMBER,
+    work_date    DATE,
+    hours_worked NUMBER
+);
+
+--Step 2 : Calculate the Hours from the Table emp_log_times by below SP summarize_daily_work_hours and insert into work_log:
+
+CREATE OR REPLACE PROCEDURE summarize_daily_work_hours IS
+  CURSOR emp_logs_cur IS
+    SELECT emp_id, log_time, log_type
+    FROM emp_log_times
+    ORDER BY emp_id, log_time;
+
+  v_prev_login   DATE := NULL;
+  v_prev_emp     NUMBER := NULL;
+  v_curr_emp     NUMBER := NULL;
+  v_curr_date    DATE := NULL;
+  v_total_secs   NUMBER := 0;
+
+
+BEGIN
+  
+  -- Main logic
+  FOR v_row IN emp_logs_cur LOOP
+    v_curr_emp := v_row.emp_id;
+    v_curr_date := TRUNC(v_row.log_time);
+
+    IF v_row.log_type = 'LOGIN' THEN
+      v_prev_login := v_row.log_time;
+
+    ELSIF v_row.log_type = 'LOGOUT' THEN
+      IF v_prev_login IS NOT NULL AND v_prev_emp = v_curr_emp THEN
+        v_total_secs := v_total_secs + (v_row.log_time - v_prev_login) * 86400; -- Convert into Seconds 
+        v_prev_login := NULL;
+      END IF;
+    END IF;
+
+    -- Change of employee or date, save previous total for Emp_id and Work_date
+    IF v_prev_emp IS NOT NULL AND
+       (v_prev_emp != v_curr_emp OR v_curr_date != TRUNC(v_row.log_time)) THEN
+      INSERT INTO work_log (emp_id, work_date, hours_worked)
+      VALUES (v_prev_emp, v_curr_date, ROUND(v_total_secs / 3600, 2)); --Convert into Hours and insert
+
+      v_total_secs := 0;
+      v_prev_login := NULL;
+    END IF;
+
+    v_prev_emp := v_curr_emp;
+  END LOOP;
+
+  -- Final insert after loop ends
+  IF v_total_secs > 0 THEN
+    INSERT INTO work_log (emp_id, work_date, hours_worked)
+    VALUES (v_curr_emp, v_curr_date, ROUND(v_total_secs / 3600, 2)); --Convert into Hours and insert
+  END IF;
+
+  COMMIT;
+END;
+
+
+
+
+--Step3 : Create table Empolyee hours Summary for Summary :
+
+CREATE TABLE emp_hours_summary (
+    emp_id       NUMBER,
+    total_hours  NUMBER,
+    summary_date DATE 
+);
+
+
+--Step4 : Create the Procedure to Summarize Total Hours from Work_log table and insert into emp_hours_summary table.
+
+CREATE OR REPLACE PROCEDURE summarize_employee_hours(Week_Date in Date) IS
+BEGIN
+  -- Delete previous summary 
+  DELETE FROM emp_hours_summary
+  WHERE TRUNC(summary_date) = TRUNC(SYSDATE);
+
+  -- Insert summarized data
+  INSERT INTO emp_hours_summary (emp_id, total_hours, summary_date)
+  SELECT
+    emp_id,
+    SUM(hours_worked),
+    SYSDATE
+  FROM
+    work_log
+	where work_date between Week_Date-7 and Week_Date
+  GROUP BY
+    emp_id;
+
+  COMMIT;
+
+EXCEPTION WHEN OTHERS THEN
+ROLLBACK;
+-- We can get it iserted with this error in Error log table
+dbms_output.put_line('Error in Insertion with the error : '||SQLCODE||'-'||SQLERRM);   
+END;
+
+
+--Step4 : Create Job to execute the on Every week 1AM by using above SP and insert hourly data into emp_hours_summary :
+
+BEGIN
+  DBMS_SCHEDULER.create_job (
+    job_name        => 'weekly_emp_hours_summary',
+    job_type        => 'STORED_PROCEDURE',
+    job_action      => 'summarize_employee_hours',
+    start_date      => SYSTIMESTAMP,
+    repeat_interval => 'FREQ=WEEKLY;BYDAY=SUN;BYHOUR=1;BYMINUTE=0;BYSECOND=0',
+    enabled         => TRUE,
+    comments        => 'Weekly summary of employee work hours'
+  );
+END;
+
+
+--Step 5: Provide Grants to to User to Execute the job
+GRANT CREATE JOB TO User;
+GRANT MANAGE SCHEDULER TO User;
+
+
+--Step 6 : We can fetch this Records through simple SQL Report or we can send it on Mails to respective Recipients
+--or We can generate the Report by any Report Tool or we can set autosys job for Report generationa and Place it on Server at Specific Mount
+select  * from emp_hours_summary;
+
+
