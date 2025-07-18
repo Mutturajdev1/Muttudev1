@@ -1,0 +1,6 @@
+2 . WebSocket Server and Client
+Develop a WebSocket server and client to facilitate real-time bidirectional communication.
+
+Step 1: 
+We can develop a WebSocket server and client using Java Spring Boot for the server, and HTML + JavaScript for the client — enabling real-time bidirectional communication.
+
