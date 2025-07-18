@@ -1,0 +1,42 @@
+Q1. Web Application Developmen to Implement a web application using Java, Spring Boot, and Oracle SQL to efficiently read 1 million records from an Oracle table.
+1 . Create UI for Web Application Using JSON
+2 . Create get_employees_details class with fields emp_id,emp_name
+3 . Use EntityManager to create and execute the StoredFunctionQuery.
+4 . Use input values from the UI to pass below DB function to get the data
+
+------------Database SP Creation for Data Fetch-----------------
+--Assumptions :Employee Entity Information
+--Considering the  entity and fetch the data of employees who comes under specified Date of Joining which are passed from the UI
+--Considering table has huse data and huge results from specified dates
+
+--STep1 : Create Record type object in DB for columns which are required.
+CREATE OR REPLACE TYPE emp_obj AS OBJECT (
+  emp_id   NUMBER,
+  emp_name VARCHAR2(100)
+);
+
+--Step2 : Create Collection Table for the record to store the data of above Record type
+CREATE OR REPLACE TYPE emp_tab AS TABLE OF emp_obj;
+
+
+--Step 3 : Create Function to fetch the data from the the Database with function pipeline feature 
+--Pipelined feature helps to get immediate data from the query, it will not wait till the SQL exicution completes and fetched all the Records.
+--There are 2 processes run parallelly, pulling data from the Functin and Executing SQL in Background. No need to wait until SQL executes and share the results at the end. 
+CREATE OR REPLACE FUNCTION get_employees_details(Start_date IN date,end_date IN Date)
+  RETURN emp_tab PIPELINED
+AS
+  v_emp emp_obj;
+BEGIN
+  FOR i IN (select empNO, ename from emp e where hiredate between Start_date and end_date) LOOP
+    v_emp := emp_obj(i.empNO, i.ename);
+    PIPE ROW(v_emp);
+  END LOOP;
+  RETURN;
+END;
+
+
+--Step 4 : We can use the below SQL to fetch the records and show it on UI on page wise(Pagination) :
+select * from table(get_employees_details('17-NOV-81','17-NOV-81'));
+
+
+
