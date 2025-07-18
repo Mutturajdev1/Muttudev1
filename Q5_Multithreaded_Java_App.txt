@@ -1,0 +1,21 @@
+5 . 5.	Multithreaded Java Application
+o	Develop a Java-based multithreaded application to process six tasks (A, B, C, D, E, and F) with the following execution flow:
+	Tasks A & B should run in parallel.
+	Tasks C & D should run in parallel after A & B complete.
+	The output of A & B should be fed into C & D.
+	The output of C & D should be fed into F for final processing.
+o	Design the application to handle success and failure modes for each task to ensure robustness and reliability.
+
+Step 1 .
+Use ExecutorService for managing and creating threads.
+
+step2 .
+create dependency and parallel execution on threads to get results from A & B, then pass them to C & D. and then pass output of C & D to F
+
+Step3 .
+Monitor tasks as they finish.
+
+Step4 :
+Use proper try-catch blocks to handle failures and Success.
+
+
